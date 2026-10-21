@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Länder-Kompass</title>
+<style>
+:root{--bg:#faf9f6;--fg:#1d1d1b;--mut:#77756f;--line:#d9d6cd;--card:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#161615;--fg:#eceae4;--mut:#9a978f;--line:#3a3935;--card:#1f1f1d}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;padding:max(12px,env(safe-area-inset-top)) 12px max(16px,env(safe-area-inset-bottom));max-width:640px;margin:0 auto;-webkit-user-select:none;user-select:none}
+h1{font-size:1.4rem;text-align:center;margin:4px 0 2px;outline:none}
+[data-k]{outline:none;border-bottom:1px dashed var(--mut);padding:0 2px;-webkit-user-select:text;user-select:text}
+.hint{text-align:center;color:var(--mut);font-size:.8rem;margin:0 0 10px}
+.yl,.row{display:flex;justify-content:center;font-size:.9rem;gap:6px;padding:4px 0}
+.row{justify-content:space-between}
+b{color:var(--mut);font-weight:500;font-size:.75rem}
+.plot{position:relative;aspect-ratio:1;border:1.5px solid var(--fg);border-radius:6px;touch-action:none;
+background:linear-gradient(var(--line),var(--line)) center/1.5px 100% no-repeat,linear-gradient(var(--line),var(--line)) center/100% 1.5px no-repeat,var(--card)}
+.chip{--s:38px;width:var(--s);height:var(--s);position:relative;touch-action:none;cursor:grab;flex:none}
+.f{width:100%;height:100%;border-radius:50%;overflow:hidden;border:2px solid var(--card);box-shadow:0 0 0 1px var(--mut),0 2px 4px #0004}
+.f svg{display:block;width:100%;height:100%}
+.plot .chip{position:absolute;transform:translate(-50%,-50%);--s:34px}
+.n{display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);font-size:10px;white-space:nowrap;background:var(--card);padding:0 3px;border-radius:3px;pointer-events:none}
+.names .plot .n{display:block}
+.ghost{position:fixed;transform:translate(-50%,-50%) scale(1.2);pointer-events:none;z-index:99;--s:44px}
+#ro{min-height:1.6em;text-align:center;font-size:.9rem;margin:8px 0}
+#tray{display:flex;flex-wrap:wrap;gap:10px 8px;justify-content:center;padding:10px 0;border-top:1px solid var(--line)}
+.t{display:flex;flex-direction:column;align-items:center;width:58px;font-size:10px;color:var(--mut);text-align:center}
+.t span{margin-top:3px;line-height:1.1}
+.btns{display:flex;gap:8px;justify-content:center;margin-top:6px}
+button{font:inherit;font-size:.85rem;padding:8px 14px;border-radius:8px;border:1px solid var(--mut);background:var(--card);color:var(--fg)}
+</style>
+</head>
+<body>
+<h1 data-k="t"></h1>
+<p class="hint">Titel und Achsenbeschriftungen antippen zum Ändern</p>
+<div class="yl"><span data-k="yt"></span> <b>+100</b></div>
+<div class="plot" id="plot"></div>
+<div class="row"><span><b>−100</b> <span data-k="xl"></span></span><b>0</b><span><span data-k="xr"></span> <b>+100</b></span></div>
+<div class="yl"><span data-k="yb"></span> <b>−100</b></div>
+<div id="ro">Zieh eine Flagge auf die Karte.</div>
+<div id="tray"></div>
+<div class="btns"><button id="bn">Namen ein/aus</button><button id="br">Karte leeren</button></div>
+<script>
+const H=(...c)=>c.map((f,i)=>`<rect y="${i*20/c.length}" width="30" height="${20/c.length+.05}" fill="${f}"/>`).join('');
+const V=(...c)=>c.map((f,i)=>`<rect x="${i*30/c.length}" width="${30/c.length+.05}" height="20" fill="${f}"/>`).join('');
+const R=f=>`<rect width="30" height="20" fill="${f}"/>`;
+const O=(x,y,r,f)=>`<circle cx="${x}" cy="${y}" r="${r}" fill="${f}"/>`;
+const N=(b,f,i)=>R(b)+`<rect x="8" width="4" height="20" fill="${f}"/><rect y="8" width="30" height="4" fill="${f}"/>`+(i?`<rect x="9" width="2" height="20" fill="${i}"/><rect y="9" width="30" height="2" fill="${i}"/>`:'');
+const star=(x,y,r,f)=>{let p=[];for(let i=0;i<10;i++){const a=Math.PI/5*i-Math.PI/2,q=i%2?r*.4:r;p.push((x+q*Math.cos(a)).toFixed(2)+','+(y+q*Math.sin(a)).toFixed(2))}return `<polygon points="${p.join(' ')}" fill="${f}"/>`};
+const tri=(a,b)=>`<polygon points="${a}" fill="none" stroke="#0038b8" stroke-width=".7"/>`;
+const FL={
+de:['Deutschland',H('#000','#dd0000','#ffce00')],
+fr:['Frankreich',V('#0055a4','#fff','#ef4135')],
+it:['Italien',V('#009246','#fff','#ce2b37')],
+es:['Spanien',R('#aa151b')+'<rect y="5" width="30" height="10" fill="#f1bf00"/>'],
+nl:['Niederlande',H('#ae1c28','#fff','#21468b')],
+be:['Belgien',V('#000','#fdda24','#ef3340')],
+at:['Österreich',H('#ed2939','#fff','#ed2939')],
+ch:['Schweiz',R('#d52b1e')+'<rect x="13" y="4" width="4" height="12" fill="#fff"/><rect x="10" y="8" width="10" height="4" fill="#fff"/>'],
+pl:['Polen',H('#fff','#dc143c')],
+ua:['Ukraine',H('#0057b7','#ffd700')],
+ru:['Russland',H('#fff','#0039a6','#d52b1e')],
+tr:['Türkei',R('#e30a17')+O(11,10,5,'#fff')+O(12.3,10,4,'#e30a17')+star(16.5,10,2.3,'#fff')],
+gb:['Großbritannien',R('#012169')+'<path d="M0 0L30 20M30 0L0 20" stroke="#fff" stroke-width="4"/><path d="M0 0L30 20M30 0L0 20" stroke="#c8102e" stroke-width="1.6"/><path d="M15 0v20M0 10h30" stroke="#fff" stroke-width="6"/><path d="M15 0v20M0 10h30" stroke="#c8102e" stroke-width="3.6"/>'],
+us:['USA',Array.from({length:13},(_,i)=>`<rect y="${i*20/13}" width="30" height="${20/13+.05}" fill="${i%2?'#fff':'#b22234'}"/>`).join('')+'<rect width="13" height="10.8" fill="#3c3b6e"/>'],
+cn:['China',R('#de2910')+star(6,6,3.2,'#ffde00')],
+jp:['Japan',R('#fff')+O(15,10,6,'#bc002d')],
+in:['Indien',H('#ff9933','#fff','#138808')+'<circle cx="15" cy="10" r="2.3" fill="none" stroke="#000080" stroke-width=".5"/>'],
+br:['Brasilien',R('#009c3b')+'<polygon points="15,2 28,10 15,18 2,10" fill="#ffdf00"/>'+O(15,10,4.6,'#002776')],
+il:['Israel',R('#fff')+'<rect y="2.5" width="30" height="3" fill="#0038b8"/><rect y="14.5" width="30" height="3" fill="#0038b8"/>'+tri('15,6.5 18,12.5 12,12.5')+tri('15,13.5 18,7.5 12,7.5')],
+ir:['Iran',H('#239f40','#fff','#da0000')+O(15,10,2,'#da0000')],
+se:['Schweden',N('#006aa7','#fecc00')],
+no:['Norwegen',N('#ba0c2f','#fff','#00205b')],
+dk:['Dänemark',N('#c8102e','#fff')],
+fi:['Finnland',N('#fff','#003580')],
+ie:['Irland',V('#169b62','#fff','#ff883e')],
+hu:['Ungarn',H('#ce2939','#fff','#477050')]
+};
+const DEF={t:'Länder-Kompass',xl:'irrational',xr:'rational',yt:'gut',yb:'böse'};
+let S={pos:{},lab:{},names:false};
+try{Object.assign(S,JSON.parse(localStorage.kompass||'{}'))}catch(e){}
+S.lab={...DEF,...S.lab};
+const save=()=>{try{localStorage.kompass=JSON.stringify(S)}catch(e){}};
+const $=s=>document.querySelector(s),plot=$('#plot'),tray=$('#tray'),ro=$('#ro');
+
+document.querySelectorAll('[data-k]').forEach(el=>{
+  el.textContent=S.lab[el.dataset.k];
+  el.contentEditable='plaintext-only';el.spellcheck=false;
+  el.oninput=()=>{S.lab[el.dataset.k]=el.textContent;save()};
+  el.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();el.blur()}};
+});
+
+function mk(c){
+  const d=document.createElement('div');d.className='chip';d.dataset.c=c;
+  d.innerHTML=`<div class="f"><svg viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice">${FL[c][1]}</svg></div><span class="n">${FL[c][0]}</span>`;
+  return d;
+}
+function render(){
+  tray.innerHTML='';plot.innerHTML='';
+  for(const c in FL)if(!(c in S.pos)){
+    const w=document.createElement('div');w.className='t';w.append(mk(c));
+    const s=document.createElement('span');s.textContent=FL[c][0];w.append(s);tray.append(w);
+  }
+  for(const c in S.pos){
+    const e=mk(c),p=S.pos[c];
+    e.style.left=(p.x+100)/2+'%';e.style.top=(100-p.y)/2+'%';plot.append(e);
+  }
+  document.body.classList.toggle('names',S.names);
+}
+const fmt=n=>(n>0?'+':'')+n;
+const cl=v=>Math.max(-100,Math.min(100,Math.round(v)));
+function show(c,p){ro.textContent=p?`${FL[c][0]}: x ${fmt(cl(p.x))} · y ${fmt(cl(p.y))}`:`${FL[c][0]}`}
+
+let D=null;
+function pt(e){
+  const r=plot.getBoundingClientRect();
+  const x=(e.clientX-r.left)/r.width*200-100,y=100-(e.clientY+D.t-r.top)/r.height*200;
+  return{x,y,in:Math.abs(x)<=104&&Math.abs(y)<=104};
+}
+document.addEventListener('pointerdown',e=>{
+  const el=e.target.closest('.chip');if(!el||D)return;
+  e.preventDefault();
+  const c=el.dataset.c,g=el.cloneNode(true);g.className='chip ghost';document.body.append(g);
+  D={c,g,from:{x:e.clientX,y:e.clientY},moved:false,t:e.pointerType==='touch'?-40:0};
+  if(c in S.pos)el.style.opacity=.35;
+  mv(e);
+});
+function mv(e){
+  if(!D)return;
+  D.g.style.left=e.clientX+'px';D.g.style.top=e.clientY+D.t+'px';
+  if(Math.hypot(e.clientX-D.from.x,e.clientY-D.from.y)>5)D.moved=true;
+  const p=pt(e);show(D.c,p.in?p:null);
+}
+document.addEventListener('pointermove',mv);
+document.addEventListener('pointerup',e=>{
+  if(!D)return;
+  const{c,g,moved}=D,p=pt(e);g.remove();
+  if(moved&&p.in){delete S.pos[c];S.pos[c]={x:cl(p.x),y:cl(p.y)};show(c,S.pos[c])}
+  else if(moved){delete S.pos[c];show(c,null)}
+  else show(c,S.pos[c]);
+  D=null;save();render();
+});
+document.addEventListener('pointercancel',()=>{if(D){D.g.remove();D=null;render()}});
+$('#bn').onclick=()=>{S.names=!S.names;save();render()};
+$('#br').onclick=()=>{if(confirm('Alle Flaggen von der Karte nehmen?')){S.pos={};save();render();ro.textContent='Zieh eine Flagge auf die Karte.'}};
+render();
+</script>
+</body>
+</html>
